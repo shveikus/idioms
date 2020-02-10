@@ -1,8 +1,8 @@
-require 'pry'
 require 'rubygems'
 require 'open-uri'
 require 'nokogiri'
 require 'ruby-progressbar'
+require 'json'
 
 URI_BASE = 'https://www.skypeenglishclasses.com/english-phrasal-verbs/'.freeze
 
@@ -26,7 +26,7 @@ end
 hashes_with_phrasal_verbs.shift
 
 total_verbs = hashes_with_phrasal_verbs.length
-
+count_of_threads = total_verbs / 10
 threads = []
 
 @result = []
@@ -61,9 +61,10 @@ def build_json(verb, verb_page)
   }.to_json
 end
 
-def add_description_to_array(hash_source, arr_destination)
+def add_description_to_source_array(hash_source, arr_destination)
   if hash_source[:link].nil?
-    arr_destination << { name: hash_source[:name], error: 'Description not available' }
+    arr_destination << { name: hash_source[:name], error: 'Description not available' }.to_json
+    @progressbar.increment
     return
   end
   verb_page = Nokogiri::HTML(open(hash_source[:link]))
@@ -71,10 +72,16 @@ def add_description_to_array(hash_source, arr_destination)
   arr_destination << build_json(hash_source[:name], verb_page)
 end
 
-hashes_with_phrasal_verbs.each do |hash|
-  add_description_to_array(hash, @result)
+# run threads in safe concurrence by passing into each thread
+# unique array with values
+hashes_with_phrasal_verbs.each_slice(count_of_threads) do |arr|
+  threads << Thread.new do
+    arr.each do |hash|
+      add_description_to_source_array(hash, @result)
+    end
+  end
 end
 
+threads.each(&:join)
 File.write('phrasal_verbs.json', @result)
-binding.pry
-puts "Done, result saved to file: #{Dir.pwd}/phrasal_verbs.json"
+puts "\nDone, #{@result.length} phrasal verbs saved to file: #{Dir.pwd}/phrasal_verbs.json"
