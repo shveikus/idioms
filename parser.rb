@@ -6,43 +6,39 @@ require 'json'
 
 URI_BASE = 'https://www.skypeenglishclasses.com/english-phrasal-verbs/'.freeze
 
-page = Nokogiri::HTML(open(URI_BASE))
+THREADS_COUNT = 30
 
-hashes_with_phrasal_verbs = page.css('#content div.content-text table tbody tr')
-                                .map do |elem|
-  name = if elem.css('td a').text.empty?
-           elem.css('td')[0].text
-         else
-           elem.css('td a').text
-         end
+def get_phrasal_verbs(uri)
+  page = Nokogiri::HTML(open(URI_BASE))
+  hash_list = page.css('#content div.content-text table tbody tr')
+                   .map do |elem|
+    name = if elem.css('td a').text.empty?
+             elem.css('td')[0].text
+           else
+             elem.css('td a').text
+           end
 
-  {
-    name: name,
-    link: elem.css('td a').map { |a| a['href'] }.first
-  }
+    {
+      name: name,
+      link: elem.css('td a').map { |a| a['href'] }.first
+    }
+  end
+
+  # removing title of the table
+  hash_list.shift
+  hash_list
 end
 
-# removing title of the table
-hashes_with_phrasal_verbs.shift
-
-total_verbs = hashes_with_phrasal_verbs.length
-count_of_threads = total_verbs / 10
-threads = []
-
-@result = []
-
-@progressbar = ProgressBar.create(format: '%a |%b>>%i| %p%% %t', total: total_verbs)
-
-def get_conjugate(page)
-  page.css('main div div div ul').children.select(&:element?).map(&:text)
+def get_conjugate(verb_page)
+  verb_page.css('main div div div ul').children.select(&:element?).map(&:text)
 end
 
-def get_definitions(page)
-  arr_of_sentences = page.css('main div div div div p').map(&:text)
+def get_definitions(verb_page)
+  arr_of_sentences = verb_page.css('main div div div div p').map(&:text)
   begin
     arr_of_sentences.pop if arr_of_sentences.last.match(/^See/)
   rescue NoMethodError
-    arr_of_sentences = page.css('main div div div div').map(&:text)
+    arr_of_sentences = verb_page.css('main div div div div').map(&:text)
     arr_of_sentences.pop if arr_of_sentences.last.match(/^See/)
   end
   arr_of_sentences.each_slice(2).to_a.map! do |arr|
@@ -72,9 +68,21 @@ def add_description_to_source_array(hash_source, arr_destination)
   arr_destination << build_json(hash_source[:name], verb_page)
 end
 
+verbs_list = get_phrasal_verbs(URI_BASE)
+
+total_verbs = verbs_list.length
+
+threads = []
+
+@result = []
+
+@progressbar = ProgressBar.create(format: '%a |%b>>%i| %p%% %t', total: total_verbs)
+
 # run threads in safe concurrence by passing into each thread
 # unique array with values
-hashes_with_phrasal_verbs.each_slice(count_of_threads) do |arr|
+threads_division = total_verbs / THREADS_COUNT
+
+verbs_list.each_slice(threads_division) do |arr|
   threads << Thread.new do
     arr.each do |hash|
       add_description_to_source_array(hash, @result)
