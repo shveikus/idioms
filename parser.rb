@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 require 'rubygems'
 require 'open-uri'
 require 'nokogiri'
 require 'ruby-progressbar'
 require 'json'
 
-URI_BASE = 'https://www.skypeenglishclasses.com/english-phrasal-verbs/'.freeze
+URI_BASE = 'https://www.skypeenglishclasses.com/english-phrasal-verbs/'
 
 THREADS_COUNT = 30
 
@@ -35,12 +37,14 @@ end
 
 def get_definitions(verb_page)
   arr_of_sentences = verb_page.css('main div div div div p').map(&:text)
+
   begin
     arr_of_sentences.pop if arr_of_sentences.last.match(/^See/)
   rescue NoMethodError
     arr_of_sentences = verb_page.css('main div div div div').map(&:text)
     arr_of_sentences.pop if arr_of_sentences.last.match(/^See/)
   end
+
   arr_of_sentences.each_slice(2).to_a.map! do |arr|
     {
       definition: arr[0].gsub(/^\d. /, ''),
